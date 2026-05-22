@@ -106,7 +106,9 @@ class SandboxSettings(BaseModel):
 
 
 class DaytonaSettings(BaseModel):
-    daytona_api_key: str
+    daytona_api_key: Optional[str] = Field(
+        default="", description="Daytona API key (optional)"
+    )
     daytona_server_url: Optional[str] = Field(
         "https://app.daytona.io/api", description=""
     )
@@ -122,6 +124,10 @@ class DaytonaSettings(BaseModel):
     VNC_password: Optional[str] = Field(
         "123456", description="VNC password for the vnc service in sandbox"
     )
+
+    def is_configured(self) -> bool:
+        """Check if Daytona is properly configured with an API key."""
+        return bool(self.daytona_api_key and self.daytona_api_key.strip())
 
 
 class MCPServerConfig(BaseModel):

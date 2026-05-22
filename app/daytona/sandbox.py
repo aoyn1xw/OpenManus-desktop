@@ -1,4 +1,5 @@
 import time
+from typing import Optional
 
 from daytona import (
     CreateSandboxFromImageParams,
@@ -14,32 +15,42 @@ from app.config import config
 from app.utils.logger import logger
 
 
-# load_dotenv()
-daytona_settings = config.daytona
-logger.info("Initializing Daytona sandbox configuration")
-daytona_config = DaytonaConfig(
-    api_key=daytona_settings.daytona_api_key,
-    server_url=daytona_settings.daytona_server_url,
-    target=daytona_settings.daytona_target,
-)
+# Lazy initialization of daytona client
+_daytona: Optional[Daytona] = None
+_daytona_settings = None
 
-if daytona_config.api_key:
+
+def _ensure_daytona_initialized() -> Daytona:
+    """Ensure Daytona is initialized only when needed."""
+    global _daytona, _daytona_settings
+    
+    if _daytona is not None:
+        return _daytona
+    
+    _daytona_settings = config.daytona
+    
+    if not _daytona_settings.is_configured():
+        raise RuntimeError(
+            "Daytona is not configured. Please set 'daytona_api_key' in your config file "
+            "or environment variables to use sandbox functionality."
+        )
+    
+    logger.info("Initializing Daytona sandbox configuration")
+    daytona_config = DaytonaConfig(
+        api_key=_daytona_settings.daytona_api_key,
+        server_url=_daytona_settings.daytona_server_url,
+        target=_daytona_settings.daytona_target,
+    )
+    
     logger.info("Daytona API key configured successfully")
-else:
-    logger.warning("No Daytona API key found in environment variables")
-
-if daytona_config.server_url:
-    logger.info(f"Daytona server URL set to: {daytona_config.server_url}")
-else:
-    logger.warning("No Daytona server URL found in environment variables")
-
-if daytona_config.target:
-    logger.info(f"Daytona target set to: {daytona_config.target}")
-else:
-    logger.warning("No Daytona target found in environment variables")
-
-daytona = Daytona(daytona_config)
-logger.info("Daytona client initialized")
+    if _daytona_settings.daytona_server_url:
+        logger.info(f"Daytona server URL set to: {_daytona_settings.daytona_server_url}")
+    if _daytona_settings.daytona_target:
+        logger.info(f"Daytona target set to: {_daytona_settings.daytona_target}")
+    
+    _daytona = Daytona(daytona_config)
+    logger.info("Daytona client initialized")
+    return _daytona
 
 
 async def get_or_start_sandbox(sandbox_id: str):
@@ -48,6 +59,7 @@ async def get_or_start_sandbox(sandbox_id: str):
     logger.info(f"Getting or starting sandbox with ID: {sandbox_id}")
 
     try:
+        daytona = _ensure_daytona_initialized()
         sandbox = daytona.get(sandbox_id)
 
         # Check if sandbox needs to be started
@@ -105,6 +117,9 @@ def create_sandbox(password: str, project_id: str = None):
     logger.info("Creating new Daytona sandbox environment")
     logger.info("Configuring sandbox with browser-use image and environment variables")
 
+    daytona = _ensure_daytona_initialized()
+    daytona_settings = config.daytona
+
     labels = None
     if project_id:
         logger.info(f"Using sandbox_id as label: {project_id}")
@@ -152,6 +167,7 @@ async def delete_sandbox(sandbox_id: str):
     logger.info(f"Deleting sandbox with ID: {sandbox_id}")
 
     try:
+        daytona = _ensure_daytona_initialized()
         # Get the sandbox
         sandbox = daytona.get(sandbox_id)
 
